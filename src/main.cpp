@@ -33,9 +33,18 @@ int main()
   uWS::Hub h;
 
   PID pid;
-  // TODO: Initialize the pid variable.
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  // Initialize the pid variable.
+  pid.Init(0.094952, 0, 0.1299999);
+
+  PID pid_t;
+  pid_t.Init(1.3, 0, 1.5);
+
+#ifdef UWS_VCPKG
+  h.onMessage([&pid, &pid_t](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
+#else
+  h.onMessage([&pid, &pid_t](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+#endif
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -50,28 +59,62 @@ int main()
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          double steer_value;
+          double steer_value, throttle_value;
           /*
-          * TODO: Calcuate steering value here, remember the steering value is
+          * Calcuate steering value here, remember the steering value is
           * [-1, 1].
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
-          
+          pid.UpdateError(cte);
+          steer_value = pid.GetAdjustment();
+#if 0
+          if (fabs(steer_value) > 0.05) {
+            if ((1 - 9 * fabs(steer_value)) > 0) {
+              throttle_value = 0.5 * (1 - 9 * fabs(steer_value));
+            }
+            else {
+              throttle_value = 0.0;
+            }
+          }
+          else 
+          {
+            throttle_value = 0.5;
+          }
+#else
+          pid_t.UpdateError(steer_value);
+          if (0.3 > fabs(pid_t.GetAdjustment()))
+          {
+            throttle_value = 0.3 - fabs(pid_t.GetAdjustment());
+          }
+          else {
+            throttle_value = 0;
+          }
+#endif
           // DEBUG
+          std::cout << "Total Error:" << pid.TotalError() << std::endl;
+          std::cout << "Best Error:" << pid.best_error << std::endl;
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = throttle_value;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
+#ifdef UWS_VCPKG
+          ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#else
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#endif
         }
       } else {
         // Manual driving
         std::string msg = "42[\"manual\",{}]";
+#ifdef UWS_VCPKG
+        ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#else
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#endif
       }
     }
   });
@@ -91,17 +134,26 @@ int main()
     }
   });
 
+#ifdef UWS_VCPKG
+  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> *ws, uWS::HttpRequest req) {
+#else
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+#endif
     std::cout << "Connected!!!" << std::endl;
   });
 
+#ifdef UWS_VCPKG
+  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> *ws, int code, char *message, size_t length) {
+    ws->close();
+#else
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
     ws.close();
+#endif
     std::cout << "Disconnected" << std::endl;
   });
 
   int port = 4567;
-  if (h.listen(port))
+  if (h.listen("127.0.0.1", port))
   {
     std::cout << "Listening to port " << port << std::endl;
   }

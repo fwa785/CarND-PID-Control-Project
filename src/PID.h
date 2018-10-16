@@ -17,6 +17,8 @@ public:
   double Ki;
   double Kd;
 
+  double best_error;
+
   /*
   * Constructor
   */
@@ -41,6 +43,15 @@ public:
   * Calculate the total PID error.
   */
   double TotalError();
+
+  /*
+   * Return the adjustment value for the PID controller
+   */
+  double GetAdjustment();
+private:
+  double prev_cte;
+  int    iteration;
+  double total_error;
 };
 
 #endif /* PID_H */
