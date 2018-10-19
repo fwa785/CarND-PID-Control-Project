@@ -28,11 +28,11 @@ std::string hasData(std::string s) {
   return "";
 }
 
-#define INIT_KP             0.15
-#define INIT_KI             0
-#define INIT_KD             1.35
+#define INIT_KP             0.2
+#define INIT_KI             0.0001
+#define INIT_KD             1.45548
 #define TWIDDLE_ITERATIONS  500
-#define TOL                 0.1
+#define TOL                 0.2
 #define THROTTLE            0.3
 
 #define DP                  0.05
