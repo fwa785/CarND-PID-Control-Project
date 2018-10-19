@@ -42,10 +42,6 @@ public:
   */
   double TotalError();
 
-  /*
-   * Return the adjustment value for the PID controller
-   */
-  double GetAdjustment();
 private:
   double prev_cte;
   bool   updated;

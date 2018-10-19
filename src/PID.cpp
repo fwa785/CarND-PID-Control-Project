@@ -34,10 +34,5 @@ void PID::UpdateError(double cte) {
 }
 
 double PID::TotalError() {
-  return 0;
-}
-
-double PID::GetAdjustment() {
   return -(Kp * p_error) - (Kd * d_error) - (Ki * i_error);
 }
-

@@ -28,17 +28,36 @@ std::string hasData(std::string s) {
   return "";
 }
 
+#define INIT_KP             0.15
+#define INIT_KI             0
+#define INIT_KD             1.35
+#define TWIDDLE_ITERATIONS  500
+#define TOL                 0.1
+#define THROTTLE            0.3
+
+#define DP                  0.05
+#define DI                  0.0001
+#define DD                  0.1
+
 int main()
 {
   uWS::Hub h;
 
   PID pid;
 
+  int iteration = 0;
+  double err = 0;
+  double best_err = 0;
+  double dp[3] = { DP, DI, DD };
+  double p[3] = { INIT_KP, INIT_KI, INIT_KD };
+  int   index = 0;
+  int   state = 0;
+
   // Initialize the pid variable.
-  pid.Init(0.15, 0.002, 1.4);
+  pid.Init(p[0], p[1], p[2]);
 
 #ifdef UWS_VCPKG
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &iteration, &err, &best_err, &dp, &p, &index, &state](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
 #else
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
 #endif
@@ -64,11 +83,12 @@ int main()
           * another PID controller to control the speed!
           */
           pid.UpdateError(cte);
-          steer_value = pid.GetAdjustment();
-          throttle_value = 0.4;
+          steer_value = pid.TotalError();
+          throttle_value = THROTTLE;
 
           // DEBUG
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          std::cout << "Iteration: " << iteration << " Err: " << err << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
@@ -80,6 +100,65 @@ int main()
 #else
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 #endif
+
+          if (dp[0] + dp[1] + dp[2] > TOL) {
+            iteration++;
+            if (iteration >= TWIDDLE_ITERATIONS) {
+              err += cte * cte;
+            }
+            if (iteration == TWIDDLE_ITERATIONS * 2) {
+              err = err / TWIDDLE_ITERATIONS;
+              if (p[0] == INIT_KP && p[1] == INIT_KI && p[2] == INIT_KD) {
+                best_err = err;
+                index = 0;
+                state = 0;
+              }
+              else {
+                if (state == 0) {
+                  if (err < best_err) {
+                    dp[index] *= 1.1;
+                    best_err = err;
+                  }
+                  else {
+                    p[index] -= 2 * dp[index];
+                    state = 1;
+                  }
+                }
+                else {
+                  if (err < best_err) {
+                    best_err = err;
+                  }
+                  else {
+                    p[index] += dp[index];
+                    dp[index] *= 0.9;
+                  }
+                  state = 0;
+                }
+
+                if (state == 0) {
+                  index = (index + 1) % 3;
+                }
+              }
+
+              std::cout << "parameters: " << p[0] << "," << p[1] << "," << p[2] << std::endl;
+              std::cout << "dps: " << dp[0] << "," << dp[1] << "," << dp[2] << std::endl;
+              std::cout << "best_err: " << best_err << std::endl;
+              std::cout << "index: " << index << " state: " << state << std::endl;
+
+              msg = "42[\"reset\",{}]";
+#ifdef UWS_VCPKG
+              ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#else
+              ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#endif
+              iteration = 0;
+              err = 0;
+              if (state == 0) {
+                p[index] += dp[index];
+              }
+              pid.Init(p[0], p[1], p[2]);
+            }
+          }
         }
       } else {
         // Manual driving
