@@ -28,14 +28,15 @@ std::string hasData(std::string s) {
   return "";
 }
 
-#define INIT_KP             0.2
-#define INIT_KI             0.0001
-#define INIT_KD             1.45548
+#define INIT_KP             0.472162
+#define INIT_KI             0.000130564
+#define INIT_KD             0.164954
 #define TWIDDLE_ITERATIONS  500
-#define TOL                 0.2
-#define THROTTLE            0.3
+#define TOL                 0.25
+#define MAX_THROTTLE        0.45
+#define MIN_THROTTLE        0.35
 
-#define DP                  0.05
+#define DP                  0.1
 #define DI                  0.0001
 #define DD                  0.1
 
@@ -44,6 +45,7 @@ int main()
   uWS::Hub h;
 
   PID pid;
+  PID throttle_pid;
 
   int iteration = 0;
   double err = 0;
@@ -54,10 +56,12 @@ int main()
   int   state = 0;
 
   // Initialize the pid variable.
-  pid.Init(p[0], p[1], p[2]);
+  pid.Init(0.15, 0.0001, 1.45548);
+
+  throttle_pid.Init(p[0], p[1], p[2]);
 
 #ifdef UWS_VCPKG
-  h.onMessage([&pid, &iteration, &err, &best_err, &dp, &p, &index, &state](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &throttle_pid, &iteration, &err, &best_err, &dp, &p, &index, &state](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
 #else
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
 #endif
@@ -84,7 +88,12 @@ int main()
           */
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
-          throttle_value = THROTTLE;
+
+          throttle_pid.UpdateError(fabs(steer_value));
+          throttle_value = MIN_THROTTLE;
+          if (MAX_THROTTLE - fabs(throttle_pid.TotalError()) > throttle_value) {
+            throttle_value = MAX_THROTTLE - fabs(throttle_pid.TotalError());
+          }
 
           // DEBUG
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
@@ -156,7 +165,7 @@ int main()
               if (state == 0) {
                 p[index] += dp[index];
               }
-              pid.Init(p[0], p[1], p[2]);
+              throttle_pid.Init(p[0], p[1], p[2]);
             }
           }
         }
