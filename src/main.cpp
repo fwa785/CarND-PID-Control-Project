@@ -35,15 +35,12 @@ int main()
   PID pid;
 
   // Initialize the pid variable.
-  pid.Init(0.094952, 0, 0.1299999);
-
-  PID pid_t;
-  pid_t.Init(1.3, 0, 1.5);
+  pid.Init(0.15, 0.002, 1.4);
 
 #ifdef UWS_VCPKG
-  h.onMessage([&pid, &pid_t](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length, uWS::OpCode opCode) {
 #else
-  h.onMessage([&pid, &pid_t](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
 #endif
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -68,32 +65,9 @@ int main()
           */
           pid.UpdateError(cte);
           steer_value = pid.GetAdjustment();
-#if 0
-          if (fabs(steer_value) > 0.05) {
-            if ((1 - 9 * fabs(steer_value)) > 0) {
-              throttle_value = 0.5 * (1 - 9 * fabs(steer_value));
-            }
-            else {
-              throttle_value = 0.0;
-            }
-          }
-          else 
-          {
-            throttle_value = 0.5;
-          }
-#else
-          pid_t.UpdateError(steer_value);
-          if (0.3 > fabs(pid_t.GetAdjustment()))
-          {
-            throttle_value = 0.3 - fabs(pid_t.GetAdjustment());
-          }
-          else {
-            throttle_value = 0;
-          }
-#endif
+          throttle_value = 0.4;
+
           // DEBUG
-          std::cout << "Total Error:" << pid.TotalError() << std::endl;
-          std::cout << "Best Error:" << pid.best_error << std::endl;
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;

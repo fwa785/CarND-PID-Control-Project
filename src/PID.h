@@ -17,8 +17,6 @@ public:
   double Ki;
   double Kd;
 
-  double best_error;
-
   /*
   * Constructor
   */
@@ -50,8 +48,7 @@ public:
   double GetAdjustment();
 private:
   double prev_cte;
-  int    iteration;
-  double total_error;
+  bool   updated;
 };
 
 #endif /* PID_H */
