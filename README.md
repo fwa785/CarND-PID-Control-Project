@@ -3,6 +3,144 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## Introduction
+
+This project uses PID to control the steering of the vehicle so the vehicle can stay in the track. 
+The source code can be found at [here](https://github.com/fwa785/CarND-PID-Control-Project).
+
+PID algorithm has three components to adjust the steering:
+* P component for proportional adjustment
+* I component for integral adjustment
+* D component for differential adjustment
+
+## P-Component
+
+P-Component is the proportional adjustment of the control. It adjusts the steering 
+proportional to the cte(cross track error): -Kp * cte. Kp is the coefficient for the P-Component. 
+
+The bigger Kp and cte, the bigger the P-Component is to correct the cte. If Kp is chosen too small, 
+P-component won't be able to reduce cte efficiently. If Kp is chosen too big, the P-component will be 
+overshoot make cte pass the target and go to the other direction.
+
+When I adjusted the Kp, as expecte, if Kp is too small, the car drifted off the track. If Kp is too big,
+the car oscilate a lot on the track and eventually ran off the track. With a right Kp, the car stayed on
+the track longer with small oscilation.
+
+## D-Component
+D-Component is the differential adjustment of the control. It adjusts the steering
+according to the difference of cte and the previous recorded cte: -Kd * (cte - prev_cte). Kd is the 
+coefficient for the D-Component.
+
+The D-component will reduce the overshoot caused by the P-Component. When the D-component is chosen well,
+the oscillation caused by the P-component will reduce. However, if Kd is too big, it can cause the 
+vehicle to oscillate again.
+
+## I-Component
+I-Component is the integral adjustment of the control. It adjusts the steering according to the sum of 
+the cte: -Ki * SUM(cte). This component is to offset some constant drift of the control, for example, 
+if there are wind blowing the vehicle to one direction constantly. For the simulation, there is not 
+much constant bias, so this component should be very small. Actually I found zero I-component works 
+pretty well.
+
+## Tune the Coefficients Parameters
+
+### Manual Method 
+First, I used manual method to find the right coefficients. 
+
+I use the following steps to manually find the coefficients:
+* Initialize all the coefficients as zero
+* Set the throttle of the vehicle as low as 0.1, so the vehicle runs at low speed
+* Increase P-Component coefficient Kp until the vehicle stay on the track most of the time
+* Kp is set to 0.15, and the video below shows the vehicle stay on the track
+
+    <video width="320" height="240" controls>
+        <source src="LowSpeed_Kp.mp4" type="video/mp4">
+    </video>
+
+* Increase the throttle of the vehicle back to 0.3. The vehicle starts to oscillate on the track 
+and gets off the track very soon
+* Increase the D-Component coefficient Kd until the vehicle doesn't oscillate too much and stays on
+the track
+* Kd is set to 1.35, and the video below shows the vehicle stay on the track
+
+* Further increase the throttle of the vehicle to 0.5. The vehicle starts to oscillate a lot again
+* Increase the I-Component coefficient Ki to make the oscillation damp quicker. The Ki can't be too
+big, because there is not much system bias to correct. It's also not very obvious the Ki makes too much
+difference
+* Eventually Ki is set to 0.002. The oscillation of the vehicle still is pretty big, but the vehicle stays
+on the track most of the time as shown in the video below
+
+### Twiddle
+Then, I set the throttle back to 0.3, and used twiddle algorithm from the class to find tune the 
+coefficients. The coefficients are initialized to [0.15, 0.002, 1.35] so twiddle algorithm can 
+converge quicker.
+
+The algorithm implemented as below in C++. It basically convert the python code from class to C++.
+
+
+          if (dp[0] + dp[1] + dp[2] > TOL) {
+            iteration++;
+            if (iteration >= TWIDDLE_ITERATIONS) {
+              err += cte * cte;
+            }
+            if (iteration == TWIDDLE_ITERATIONS * 2) {
+              err = err / TWIDDLE_ITERATIONS;
+              if (best_err < 0) { // the best_err has not setup yet
+                best_err = err;
+                index = 0;
+                state = 0;
+              }
+              else {
+                if (state == 0) {
+                  if (err < best_err) {
+                    dp[index] *= 1.1;
+                    best_err = err;
+                  }
+                  else {
+                    p[index] -= 2 * dp[index];
+                    state = 1;
+                  }
+                }
+                else {
+                  if (err < best_err) {
+                    best_err = err;
+                  }
+                  else {
+                    p[index] += dp[index];
+                    dp[index] *= 0.9;
+                  }
+                  state = 0;
+                }
+
+                if (state == 0) {
+                  index = (index + 1) % 3;
+                }
+              }
+
+              std::cout << "parameters: " << p[0] << "," << p[1] << "," << p[2] << std::endl;
+              std::cout << "dps: " << dp[0] << "," << dp[1] << "," << dp[2] << std::endl;
+              std::cout << "best_err: " << best_err << std::endl;
+              std::cout << "index: " << index << " state: " << state << std::endl;
+
+              msg = "42[\"reset\",{}]";
+#ifdef UWS_VCPKG
+              ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#else
+              ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#endif
+              iteration = 0;
+              err = 0;
+              if (state == 0) {
+                p[index] += dp[index];
+              }
+              pid.Init(p[0], p[1], p[2]);
+            }
+          }
+
+With twiddle algorithm, the coefficients are selected as: [0.2, 0.0001, 1.45548]. Visually
+there is not much difference I could tell from the coefficients I chose manually. In fact, I feel
+the vehicle oscillates more so I reduced the Kp back to 1.5 as my final choice.
+
 ## Dependencies
 
 * cmake >= 3.5
@@ -34,65 +172,3 @@ There's an experimental patch for windows in this [PR](https://github.com/udacit
 2. Make a build directory: `mkdir build && cd build`
 3. Compile: `cmake .. && make`
 4. Run it: `./pid`. 
-
-Tips for setting up your environment can be found [here](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/23d376c7-0195-4276-bdf0-e02f1f3c665d)
-
-## Editor Settings
-
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
-
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
-
-## Code Style
-
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
-
-## Project Instructions and Rubric
-
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
-
-More information is only accessible by people who are already enrolled in Term 2
-of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/f1820894-8322-4bb3-81aa-b26b3c6dcbaf/lessons/e8235395-22dd-4b87-88e0-d108c5e5bbf4/concepts/6a4d8d42-6a04-4aa6-b284-1697c0fd6562)
-for instructions and the project rubric.
-
-## Hints!
-
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
-
-## Call for IDE Profiles Pull Requests
-
-Help your fellow students!
-
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
-that students don't feel pressured to use one IDE or another.
-
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
-
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
-
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
