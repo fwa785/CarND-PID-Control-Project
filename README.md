@@ -5,13 +5,13 @@ Self-Driving Car Engineer Nanodegree Program
 
 ## Introduction
 
-This project uses PID to control the steering of the vehicle so the vehicle can stay in the track. 
+This project uses PID algorithm to control the steering of the vehicle so the vehicle can stay in the track. 
 The source code can be found at [here](https://github.com/fwa785/CarND-PID-Control-Project).
 
-PID algorithm has three components to adjust the steering:
-* P component for proportional adjustment
-* I component for integral adjustment
-* D component for differential adjustment
+The steering is set to: steering = -Kp * cte - Kd * (cte-prev_cte) - Ki * SUM(cte). There are three components:
+* P component for proportional adjustment: -Kp * cte
+* I component for integral adjustment: -Ki * SUM(cte)
+* D component for differential adjustment: -Kd *(cte-prev_cte)
 
 ## P-Component
 
@@ -22,7 +22,7 @@ The bigger Kp and cte, the bigger the P-Component is to correct the cte. If Kp i
 P-component won't be able to reduce cte efficiently. If Kp is chosen too big, the P-component will be 
 overshoot make cte pass the target and go to the other direction.
 
-When I adjusted the Kp, as expecte, if Kp is too small, the car drifted off the track. If Kp is too big,
+When I adjusted the Kp, as expected, if Kp is too small, the car drifted off the track. If Kp is too big,
 the car oscilate a lot on the track and eventually ran off the track. With a right Kp, the car stayed on
 the track longer with small oscilation.
 
@@ -51,29 +51,23 @@ I use the following steps to manually find the coefficients:
 * Initialize all the coefficients as zero
 * Set the throttle of the vehicle as low as 0.1, so the vehicle runs at low speed
 * Increase P-Component coefficient Kp until the vehicle stay on the track most of the time
-* Kp is set to 0.15, and the video below shows the vehicle stay on the track
-
-    <video width="320" height="240" controls>
-        <source src="LowSpeed_Kp.mp4" type="video/mp4">
-    </video>
-
+* Kp is set to 0.15, and the vehicle stay on the track
 * Increase the throttle of the vehicle back to 0.3. The vehicle starts to oscillate on the track 
 and gets off the track very soon
 * Increase the D-Component coefficient Kd until the vehicle doesn't oscillate too much and stays on
 the track
-* Kd is set to 1.35, and the video below shows the vehicle stay on the track
-
+* Kd is set to 1.35, and the vehicle stay on the track
 * Further increase the throttle of the vehicle to 0.5. The vehicle starts to oscillate a lot again
 * Increase the I-Component coefficient Ki to make the oscillation damp quicker. The Ki can't be too
 big, because there is not much system bias to correct. It's also not very obvious the Ki makes too much
 difference
 * Eventually Ki is set to 0.002. The oscillation of the vehicle still is pretty big, but the vehicle stays
-on the track most of the time as shown in the video below
+on the track most of the time
 
 ### Twiddle
 Then, I set the throttle back to 0.3, and used twiddle algorithm from the class to find tune the 
-coefficients. The coefficients are initialized to [0.15, 0.002, 1.35] so twiddle algorithm can 
-converge quicker.
+coefficients. The coefficients are initialized to the parameters I found manually: [0.15, 0.002, 1.35] so 
+twiddle algorithm can converge quicker.
 
 The algorithm implemented as below in C++. It basically convert the python code from class to C++.
 
@@ -123,11 +117,7 @@ The algorithm implemented as below in C++. It basically convert the python code 
               std::cout << "index: " << index << " state: " << state << std::endl;
 
               msg = "42[\"reset\",{}]";
-#ifdef UWS_VCPKG
-              ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-#else
               ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-#endif
               iteration = 0;
               err = 0;
               if (state == 0) {
@@ -140,6 +130,35 @@ The algorithm implemented as below in C++. It basically convert the python code 
 With twiddle algorithm, the coefficients are selected as: [0.2, 0.0001, 1.45548]. Visually
 there is not much difference I could tell from the coefficients I chose manually. In fact, I feel
 the vehicle oscillates more so I reduced the Kp back to 1.5 as my final choice.
+
+## Result
+With [Kp, Ki, Kd] set to [1.5, 0.0001, 1.45548] and the throttle set to 0.3. The vehicle runs pretty well on 
+the track.
+
+[![IMAGE Final Result](https://img.youtube.com/vi/kVNcX8B06UY/0.jpg)](https://www.youtube.com/watch?v=kVNcX8B06UY&feature=youtu.be)
+
+## PID Control for Throttling
+When the speed increases, the same coefficient parameters don't work well. When throttling is set
+to 0.5, with the same coefficient paramters the vehicle oscillates a lot, although stays on the
+track mostly.
+
+I tried to use PID to control the throttling. The idea is when the steering is high, the speed
+should be lower so the vehicle doesn't make turns too sharp and loss control. So I feed the 
+absolute value of the steering to replace the cte to the PID for throttling. The throttling is 
+set to MAX_THROTTLE - abs(the PID controll value). To prevent a nagative throttling, I set a 
+MIN_THROTTLE value so the throttling value won't be less than MIN_THROTTLE.
+
+
+          throttle_pid.UpdateError(fabs(steer_value));
+          throttle_value = MIN_THROTTLE;
+          if (MAX_THROTTLE - fabs(throttle_pid.TotalError()) > throttle_value) {
+            throttle_value = MAX_THROTTLE - fabs(throttle_pid.TotalError());
+          }
+
+I used the twiddle algorithm to find the Kp, Ki and Kd for the throttling PID. With the PID 
+throttling control, the vehicle stays a little better on the track on higher maximum 
+throttling, but the improvement is limited. So by default, I still set the throttling to the
+constant value 0.3.
 
 ## Dependencies
 
